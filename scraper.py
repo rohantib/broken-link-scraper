@@ -41,10 +41,10 @@ class WebScraper:
         
         try:
             timeout = aiohttp.ClientTimeout(total=20)
-            logger.debug(f"Checking {url}")
             async with session.get(url, timeout=timeout) as response:
                 # Check if it's a 404 first
                 if response.status == 404:
+                    logger.debug(f"404 error at {url} (from {source_page})")
                     if source_page not in self.broken_links:
                         self.broken_links[source_page] = []
                     self.broken_links[source_page].append(url)
@@ -185,7 +185,7 @@ def main():
         print("Please enter a valid URL")
         sys.exit(1)
     scraper = WebScraper(url)
-    logger.configure(handlers=[{"sink": sys.stdout, "level": "INFO"}])
+    logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
     asyncio.run(scraper.run())
 
 if __name__ == "__main__":
