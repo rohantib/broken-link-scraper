@@ -40,7 +40,7 @@ class WebScraper:
         source_page = parent_url if parent_url is not None else url
         
         try:
-            timeout = aiohttp.ClientTimeout(total=10)
+            timeout = aiohttp.ClientTimeout(total=20)
             logger.debug(f"Checking {url}")
             async with session.get(url, timeout=timeout) as response:
                 # Check if it's a 404 first
@@ -61,7 +61,10 @@ class WebScraper:
                 
                 # Only return content for HTML pages we need to scrape (same domain)
                 if WebScraper.get_base_domain(url) == self.domain:
-                    return await response.text()
+                    try:
+                        return await response.text()
+                    except Exception as e:
+                        logger.error(f"Error fetching {url}: {str(e)}")
                 return None
                 
         except asyncio.TimeoutError:
