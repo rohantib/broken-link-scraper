@@ -101,7 +101,7 @@ class WebScraper:
                 url = task.url
                 parent_url = task.parent_url
 
-                logger.info(f"Processing: {url}")
+                logger.info(f"Processing: {url} (from {parent_url})")
 
                 html = await self.fetch_and_check_url(session, url, parent_url)
                 if html is None:
