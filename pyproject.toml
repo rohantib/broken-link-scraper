@@ -1,0 +1,11 @@
+[project]
+name = "website-404-scraper"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.10.10",
+    "beautifulsoup4>=4.12.3",
+    "loguru>=0.7.2",
+]
