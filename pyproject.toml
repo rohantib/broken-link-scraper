@@ -1,5 +1,5 @@
 [project]
-name = "website-404-scraper"
+name = "broken-link-scraper"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"

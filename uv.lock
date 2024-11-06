@@ -90,6 +90,23 @@ wheels = [
 ]
 
 [[package]]
+name = "broken-link-scraper"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "beautifulsoup4" },
+    { name = "loguru" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.10.10" },
+    { name = "beautifulsoup4", specifier = ">=4.12.3" },
+    { name = "loguru", specifier = ">=0.7.2" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -246,23 +263,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d7/ce/fbaeed4f9fb8b2daa961f90591662df6a86c1abf25c548329a86920aedfb/soupsieve-2.6.tar.gz", hash = "sha256:e2e68417777af359ec65daac1057404a3c8a5455bb8abc36f1a9866ab1a51abb", size = 101569 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/c2/fe97d779f3ef3b15f05c94a2f1e3d21732574ed441687474db9d342a7315/soupsieve-2.6-py3-none-any.whl", hash = "sha256:e72c4ff06e4fb6e4b5a9f0f55fe6e81514581fca1515028625d0f299c602ccc9", size = 36186 },
-]
-
-[[package]]
-name = "website-404-scraper"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "beautifulsoup4" },
-    { name = "loguru" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = ">=3.10.10" },
-    { name = "beautifulsoup4", specifier = ">=4.12.3" },
-    { name = "loguru", specifier = ">=0.7.2" },
 ]
 
 [[package]]

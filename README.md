@@ -2,6 +2,8 @@
 
 A Python script that recursively crawls a website starting from a base URL, checking for broken links (404s) and timeouts across the entire domain.
 
+This will check the entire base domain, e.g. given "en.example.com" the script will follow all links with domain "example.com".
+
 ## Overview
 
 This tool helps identify broken links and connectivity issues by:
