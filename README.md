@@ -38,7 +38,6 @@ This tool helps identify broken links and connectivity issues by:
 ## Usage
 
 - With `uv`:
-  - `uv run scraper.py`
+  - `uv run scraper.py <url>`
 - Without `uv`:
-  - Install the listed dependencies then run `scraper.py`
-- Provide a url when the script requests it
+  - Install the listed dependencies then run `python scraper.py <url>`
