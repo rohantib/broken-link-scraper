@@ -176,6 +176,7 @@ def main():
     parser = argparse.ArgumentParser(description="Scan a website for broken links")
     parser.add_argument('url', help="URL to scan for broken links (will stick to this URL's base domain)")
     args = parser.parse_args()
+    logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
     
     try:
         url = args.url
@@ -190,7 +191,6 @@ def main():
         print("Please enter a valid URL")
         sys.exit(1)
     scraper = WebScraper(url)
-    logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
     asyncio.run(scraper.run())
 
 if __name__ == "__main__":
