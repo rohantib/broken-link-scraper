@@ -1,4 +1,5 @@
 import aiohttp
+import argparse
 import asyncio
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, urlunparse
@@ -172,8 +173,12 @@ class WebScraper:
             print("\nNo broken or timeout links found!")
 
 def main():
-    url = input("Enter the URL to scan for broken links: ")
+    parser = argparse.ArgumentParser(description="Scan a website for broken links")
+    parser.add_argument('url', help="URL to scan for broken links (will stick to this URL's base domain)")
+    args = parser.parse_args()
+    
     try:
+        url = args.url
         result = urlparse(url)
         if not all([result.scheme, result.netloc]):
             if not url.startswith(('http://', 'https://')):
