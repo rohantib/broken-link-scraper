@@ -69,6 +69,7 @@ class WebScraper:
                 # Only return content for HTML pages we need to scrape (same domain)
                 if WebScraper.get_base_domain(url) == self.domain:
                     try:
+                        # TODO: Need to resolve and return redirected URL to correctly resolve future relative links
                         return await response.text()
                     except Exception as e:
                         logger.error(f"Error fetching {url}: {str(e)}")
@@ -137,46 +138,50 @@ class WebScraper:
 
     async def run(self):
         """Run the scraper with multiple workers."""
-        connector = aiohttp.TCPConnector(limit=10)  # Limit concurrent connections
-        async with aiohttp.ClientSession(connector=connector) as session:
-            # Start with the initial URL
-            await self.queue.put(ScrapeTask(self.start_url))
+        try:
+            connector = aiohttp.TCPConnector(limit=10)  # Limit concurrent connections
+            async with aiohttp.ClientSession(connector=connector) as session:
+                # Start with the initial URL
+                await self.queue.put(ScrapeTask(self.start_url))
 
-            # Create workers
-            workers = [
-                asyncio.create_task(self.worker(session, i))
-                for i in range(self.max_workers)
-            ]
+                # Create workers
+                workers = [
+                    asyncio.create_task(self.worker(session, i))
+                    for i in range(self.max_workers)
+                ]
 
-            # Wait for the queue to be empty
-            await self.queue.join()
+                try:
+                    # Wait for the queue to be empty
+                    await self.queue.join()
+                except (KeyboardInterrupt, asyncio.CancelledError):
+                    logger.info("Received interrupt, stopping workers...")
+                finally:
+                    # Cancel workers
+                    for w in workers:
+                        w.cancel()
 
-            # Cancel workers
-            for w in workers:
-                w.cancel()
+                    # Wait for workers to finish
+                    await asyncio.gather(*workers, return_exceptions=True)
+        finally:
+            # Print results no matter what happened
+            if self.broken_links or self.timeout_links:
+                print("\n\033[1;31mBroken Links Report:\033[0m")
+                print("\033[1;31m===================\033[0m")
+                for page, broken_links in self.broken_links.items():
+                    print(f"\n\033[1;37mOn page: {page}\033[0m")
+                    print("\033[1;31m404 Errors:\033[0m")
+                    for link in broken_links:
+                        print(f"\033[0;31m  - {link}\033[0m")
 
-            # Wait for workers to finish
-            await asyncio.gather(*workers, return_exceptions=True)
-
-        # Print results
-        if self.broken_links or self.timeout_links:
-            print("\nBroken Links Report:")
-            print("===================")
-            for page, broken_links in self.broken_links.items():
-                print(f"\nOn page: {page}")
-                print("404 Errors:")
-                for link in broken_links:
-                    print(f"  - {link}")
-
-            print("\nTimeout Links Report:")
-            print("====================")
-            for page, timeout_links in self.timeout_links.items():
-                print(f"\nOn page: {page}")
-                print("Timeout Errors:")
-                for link in timeout_links:
-                    print(f"  - {link}")
-        else:
-            print("\nNo broken or timeout links found!")
+                print("\n\033[1;33mTimeout Links Report:\033[0m")
+                print("\033[1;33m====================\033[0m")
+                for page, timeout_links in self.timeout_links.items():
+                    print(f"\n\033[1;37mOn page: {page}\033[0m")
+                    print("\033[1;33mTimeout Errors:\033[0m")
+                    for link in timeout_links:
+                        print(f"\033[0;33m  - {link}\033[0m")
+            else:
+                print("\n\033[1;32mNo broken or timeout links found!\033[0m")
 
 
 def main():
