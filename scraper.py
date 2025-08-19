@@ -9,8 +9,8 @@ import aiohttp
 from bs4 import BeautifulSoup
 from loguru import logger
 
-MAX_WORKERS = 10
-MAX_CONCURRENT_REQUESTS = 10
+MAX_WORKERS = 20
+MAX_CONCURRENT_REQUESTS_PER_HOST = 7
 
 
 @dataclass
@@ -51,20 +51,26 @@ class WebScraper:
             (parsed.scheme, parsed.netloc, parsed.path, parsed.params, parsed.query, "")
         )
 
-    async def fetch_and_check_url(self, session, url, parent_url=None):
-        """Fetch a URL and check its status. Returns content if it's a page we should scrape."""
-        source_page = parent_url if parent_url is not None else url
+    async def fetch_and_check_url(self, session, request_url, parent_url=None):
+        """Fetch a URL and check its status. Returns (content, resolved_url) tuple if it's a page we should scrape."""
+        source_page = parent_url if parent_url is not None else request_url
 
         try:
             timeout = aiohttp.ClientTimeout(total=60)
-            async with session.get(url, timeout=timeout) as response:
+            async with session.get(request_url, timeout=timeout) as response:
+                resolved_url = str(response.url)  # Get final URL after redirects
+
                 # Check if it's a 404 first
                 if response.status == 404:
-                    logger.debug(f"404 error at {url} (from {source_page})")
+                    logger.warning(f"404 error at {request_url} (from {source_page})")
                     if source_page not in self.broken_links:
                         self.broken_links[source_page] = []
-                    self.broken_links[source_page].append(url)
-                    return None
+                    self.broken_links[source_page].append(request_url)
+                    return None, None
+
+                # Log redirect if it occurred
+                if resolved_url != request_url:
+                    logger.debug(f"Redirect: {request_url} -> {resolved_url}")
 
                 # Check content type
                 content_type = response.headers.get("Content-Type", "").lower()
@@ -73,31 +79,31 @@ class WebScraper:
                 # If it's not HTML, we just verify it works but don't return content
                 if not is_html:
                     logger.debug(
-                        f"Skipping non-HTML content at {url} (type: {content_type})"
+                        f"Skipping non-HTML content at {request_url} (type: {content_type})"
                     )
-                    return None
+                    return None, None
 
-                # Only return content for HTML pages we need to scrape (same domain)
-                if self.get_domain(url) == self.source_domain:
+                # Only return content for HTML pages we need to scrape (same domain as original request)
+                if self.get_domain(request_url) == self.source_domain:
                     try:
-                        # TODO: Need to resolve and return redirected URL to correctly resolve future relative links
-                        return await response.text()
+                        content = await response.text()
+                        return content, resolved_url
                     except Exception as e:
-                        logger.error(f"Error fetching {url}: {str(e)}")
-                return None
+                        logger.error(f"Error fetching {request_url}: {str(e)}")
+                return None, None
 
         except asyncio.TimeoutError:
             if source_page not in self.timeout_links:
                 self.timeout_links[source_page] = []
-            self.timeout_links[source_page].append(url)
-            logger.error(f"Timeout accessing {url}")
-            return None
+            self.timeout_links[source_page].append(request_url)
+            logger.error(f"Timeout accessing {request_url}")
+            return None, None
         except aiohttp.ClientError as e:
             if source_page not in self.broken_links:
                 self.broken_links[source_page] = []
-            self.broken_links[source_page].append(url)
-            logger.error(f"Error accessing {url}: {str(e)}")
-            return None
+            self.broken_links[source_page].append(request_url)
+            logger.error(f"Error accessing {request_url}: {str(e)}")
+            return None, None
 
     def extract_links(self, html, base_url):
         """Extract all links from the HTML content."""
@@ -125,18 +131,22 @@ class WebScraper:
 
                 logger.info(f"Processing: {url} (from {parent_url})")
 
-                html = await self.fetch_and_check_url(session, url, parent_url)
+                html, resolved_url = await self.fetch_and_check_url(
+                    session, url, parent_url
+                )
                 if html is None:
                     self.queue.task_done()
                     continue
 
-                links = self.extract_links(html, url)
+                links = self.extract_links(html, resolved_url)
 
                 for link in links:
                     deduped_link = WebScraper.dedupe_url(link)
                     if deduped_link in self.visited_urls:
                         continue
-                    await self.queue.put(ScrapeTask(link, url))
+                    await self.queue.put(
+                        ScrapeTask(link, url)
+                    )  # Track original URL, not the resolved URL
                     self.visited_urls.add(deduped_link)
 
                 self.queue.task_done()
@@ -151,7 +161,7 @@ class WebScraper:
         """Run the scraper with multiple workers."""
         try:
             connector = aiohttp.TCPConnector(
-                limit=MAX_CONCURRENT_REQUESTS
+                limit_per_host=MAX_CONCURRENT_REQUESTS_PER_HOST
             )  # Limit concurrent connections
             async with aiohttp.ClientSession(connector=connector) as session:
                 # Start with the initial URL
