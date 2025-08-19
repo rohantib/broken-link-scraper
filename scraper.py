@@ -9,6 +9,9 @@ import aiohttp
 from bs4 import BeautifulSoup
 from loguru import logger
 
+MAX_WORKERS = 10
+MAX_CONCURRENT_REQUESTS = 10
+
 
 @dataclass
 class ScrapeTask:
@@ -17,15 +20,23 @@ class ScrapeTask:
 
 
 class WebScraper:
-    def __init__(self, start_url, max_workers=10):
+    def __init__(self, start_url, match_full_domain=False):
         self.start_url = start_url
-        self.domain = WebScraper.get_base_domain(start_url)
-        logger.info(f"Base domain is {self.domain}")
+        self.match_full_domain = match_full_domain
+        self.source_domain = self.get_domain(start_url)
+        logger.info(f"Domain scope is {self.source_domain}")
         self.visited_urls = set()
         self.broken_links = {}  # {page_url: [broken_links]}
         self.timeout_links = {}  # {page_url: [timeout_links]}
         self.queue = asyncio.Queue()
-        self.max_workers = max_workers
+
+    def get_domain(self, url):
+        netloc = urlparse(url).netloc
+        if self.match_full_domain:
+            return netloc
+        else:
+            parts = netloc.split(".")
+            return ".".join(parts[-2:])
 
     @staticmethod
     def get_base_domain(url):
@@ -45,7 +56,7 @@ class WebScraper:
         source_page = parent_url if parent_url is not None else url
 
         try:
-            timeout = aiohttp.ClientTimeout(total=20)
+            timeout = aiohttp.ClientTimeout(total=60)
             async with session.get(url, timeout=timeout) as response:
                 # Check if it's a 404 first
                 if response.status == 404:
@@ -67,7 +78,7 @@ class WebScraper:
                     return None
 
                 # Only return content for HTML pages we need to scrape (same domain)
-                if WebScraper.get_base_domain(url) == self.domain:
+                if self.get_domain(url) == self.source_domain:
                     try:
                         # TODO: Need to resolve and return redirected URL to correctly resolve future relative links
                         return await response.text()
@@ -139,7 +150,9 @@ class WebScraper:
     async def run(self):
         """Run the scraper with multiple workers."""
         try:
-            connector = aiohttp.TCPConnector(limit=10)  # Limit concurrent connections
+            connector = aiohttp.TCPConnector(
+                limit=MAX_CONCURRENT_REQUESTS
+            )  # Limit concurrent connections
             async with aiohttp.ClientSession(connector=connector) as session:
                 # Start with the initial URL
                 await self.queue.put(ScrapeTask(self.start_url))
@@ -147,7 +160,7 @@ class WebScraper:
                 # Create workers
                 workers = [
                     asyncio.create_task(self.worker(session, i))
-                    for i in range(self.max_workers)
+                    for i in range(MAX_WORKERS)
                 ]
 
                 try:
@@ -190,6 +203,11 @@ def main():
         "url",
         help="URL to scan for broken links (will stick to this URL's base domain)",
     )
+    parser.add_argument(
+        "--match-full-domain",
+        action="store_true",
+        help="Match the full domain instead of just the base domain (e.g., subdomain.example.com vs example.com)",
+    )
     args = parser.parse_args()
     logger.configure(handlers=[{"sink": sys.stdout, "level": "DEBUG"}])
 
@@ -205,7 +223,7 @@ def main():
     except Exception:
         print("Please enter a valid URL")
         sys.exit(1)
-    scraper = WebScraper(url)
+    scraper = WebScraper(url, match_full_domain=args.match_full_domain)
     asyncio.run(scraper.run())
 
 
